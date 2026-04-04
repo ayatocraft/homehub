@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+        #wallpaper {
+            width: 100vw;
+            height: 100vh;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            transition: opacity 1.5s ease-in-out;
+            opacity: 0; /* 最初は透明 */
+        }
+    </style>
+</head>
+<body>
+    <div id="wallpaper"></div>
+
+    <script>
+        function updateImage() {
+            const wallpaper = document.getElementById('wallpaper');
+            
+            // 1920x1080のランダム画像を生成。末尾に乱数(random)を足してキャッシュを回避
+            const cacheBuster = Math.random();
+            const imageUrl = `https://picsum.photos/1920/1080?random=${cacheBuster}`;
+
+            const img = new Image();
+            img.src = imageUrl;
+            img.onload = () => {
+                wallpaper.style.opacity = 0; // フェードアウト
+                setTimeout(() => {
+                    wallpaper.style.backgroundImage = `url('${imageUrl}')`;
+                    wallpaper.style.opacity = 1; // フェードイン
+                }, 500);
+            };
+        }
+
+        // 初回実行
+        updateImage();
+
+        // 1分毎（60000ms）に実行
+        setInterval(updateImage, 60000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Hub Ultimate - Final v16</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <style>
+        :root {
+            --glass: rgba(255, 255, 255, 0.08);
+            --glass-heavy: rgba(255, 255, 255, 0.2);
+            --bg-gradient: linear-gradient(160deg, #020617 0%, #1e293b 100%);
+            --accent: #38bdf8;
+            --danger: #ef4444;
+            --dev: #10b981;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            font-family: "Yu Gothic UI", "Inter", sans-serif;
+            background: var(--bg-gradient);
+            color: white; height: 100vh; overflow: hidden;
+            user-select: none;
+        }
+
+        /* --- Animations --- */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes wiggle { 0%, 100% { transform: rotate(-0.3deg); } 50% { transform: rotate(0.3deg); } }
+        @keyframes breathe-circle { 
+            0%, 100% { transform: scale(0.8); background: rgba(56, 189, 248, 0.1); } 
+            50% { transform: scale(1.2); background: rgba(56, 189, 248, 0.4); } 
+        }
+
+        /* --- Screensaver --- */
+        #screensaver {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: black; display: none; z-index: 9999; opacity: 0; 
+            transition: opacity 1s ease-in-out; cursor: pointer;
+        }
+        #wallpaper { width: 100%; height: 100%; background-size: cover; background-position: center; transition: opacity 1.5s ease-in-out; opacity: 0; }
+        #saver-info { position: absolute; bottom: 50px; right: 50px; text-align: right; text-shadow: 0 5px 25px rgba(0,0,0,0.9); z-index: 10000; pointer-events: none; }
+        #saver-guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.2rem; background: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 30px; border: 1px solid var(--accent); opacity: 0; transition: 0.3s; }
+
+        /* --- UI Components --- */
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 40px; background: rgba(0,0,0,0.3); backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255,255,255,0.05); z-index: 100;
+        }
+        .controls button { background: var(--glass); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px 16px; border-radius: 10px; cursor: pointer; transition: 0.3s; margin-left: 10px; }
+        
+        .grid-container { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 20px; padding: 30px; height: calc(100vh - 100px); overflow-y: auto; }
+
+        .card {
+            background: var(--glass); backdrop-filter: blur(25px);
+            border-radius: 24px; padding: 20px; border: 1px solid rgba(255, 255, 255, 0.08);
+            position: relative; display: flex; flex-direction: column;
+            min-width: 200px; min-height: 150px; animation: fadeIn 0.6s ease-out forwards; box-sizing: border-box;
+        }
+        
+        .edit-mode .card { cursor: move; animation: wiggle 0.4s infinite; border: 2px dashed var(--accent); resize: both; overflow: auto; }
+        .edit-mode .card iframe { pointer-events: none; }
+
+        .card h3 { margin: 0 0 15px 0; font-size: 0.7rem; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; flex-shrink: 0; }
+        .dev-badge { color: var(--dev); font-weight: bold; margin-left: 10px; display: none; }
+        
+        .widget-body { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; }
+        .iframe-wrapper { width: 100%; height: 100%; border-radius: 12px; overflow: hidden; background: rgba(0,0,0,0.1); }
+        iframe { border: none; width: 100%; height: 100%; background: white; }
+
+        .search-input { width: 85%; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 30px; padding: 12px 20px; color: white; outline: none; text-align: center; }
+        .breathe-circle { width: 100px; height: 100px; border-radius: 50%; animation: breathe-circle 8s ease-in-out infinite; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: bold; cursor: pointer; }
+
+        .del-btn { display: none; position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border-radius: 8px; background: var(--danger); color: white; border: none; cursor: pointer; z-index: 50; }
+        .edit-mode .del-btn { display: block; }
+        .edit-toolbar { display: none; position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #000; border: 1px solid var(--accent); padding: 12px 25px; border-radius: 40px; z-index: 1000; }
+    </style>
+</head>
+<body onmousemove="resetIdle()" onkeydown="handleGlobalKey(event)" onclick="resetIdle()">
+
+<div id="screensaver" onclick="handleSaverClick()">
+    <div id="wallpaper"></div>
+    <div id="saver-guide">あと <span id="click-count">1</span> 回クリックで終了します</div>
+    <div id="saver-info">
+        <div id="saver-time" style="font-size: 5rem; font-weight: 700;"></div>
+        <div id="saver-date" style="font-size: 1.5rem; opacity: 0.8;"></div>
+    </div>
+</div>
+
+<header>
+    <div class="header-clock" id="header-clock">--:-- <span id="dev-status" class="dev-badge">DEV MODE</span></div>
+    <div class="controls">
+        <button id="edit-mode-toggle" onclick="toggleEditMode()">レイアウト編集</button>
+        <button onclick="resetAll()" style="background: rgba(239,68,68,0.2);">初期化</button>
+        <button onclick="toggleFullScreen()">全画面</button>
+    </div>
+</header>
+
+<div class="grid-container" id="grid">
+    <div class="card" data-id="search" style="width: 480px; height: 160px;">
+        <button class="del-btn" onclick="removeWidget(this)">×</button>
+        <h3>Google Search</h3>
+        <div class="widget-body">
+            <input type="text" class="search-input" placeholder="Googleで検索..." onkeydown="if(event.key==='Enter') window.open('https://www.google.com/search?q='+encodeURIComponent(this.value))">
+        </div>
+    </div>
+
+    <div class="card" data-id="greeting" style="width: 480px; height: 220px;">
+        <button class="del-btn" onclick="removeWidget(this)">×</button>
+        <h3>Personal</h3>
+        <div class="widget-body">
+            <div id="greet-msg" style="font-size: 1.8rem; font-weight: 700;">Loading...</div>
+            <div id="greet-date" style="font-size: 0.9rem; opacity: 0.6; margin-top: 5px;">----年--月--日</div>
+        </div>
+    </div>
+
+    <div class="card" data-id="mindfulness" style="width: 280px; height: 220px;">
+        <button class="del-btn" onclick="removeWidget(this)">×</button>
+        <h3>Mindfulness</h3>
+        <div class="widget-body">
+            <div class="breathe-circle" id="breathe-status" onclick="handleDevClick()">吸って...</div>
+        </div>
+    </div>
+
+    <div class="card" data-id="weather" style="width: 420px; height: 400px;">
+        <button class="del-btn" onclick="removeWidget(this)">×</button>
+        <h3>Weather</h3>
+        <div class="iframe-wrapper"><iframe src="https://weathernews.jp/onebox/radar/"></iframe></div>
+    </div>
+
+    <div class="card" data-id="scenery" style="width: 420px; height: 400px;">
+        <button class="del-btn" onclick="removeWidget(this)">×</button>
+        <h3>Astronomy</h3>
+        <div class="iframe-wrapper"><iframe src="https://ayatocraft.github.io/astronomy"></iframe></div>
+    </div>
+</div>
+
+<div id="edit-toolbar" class="edit-toolbar">
+    <button onclick="addNewWidget()" id="add-btn">＋ 新規ウィジェット追加</button>
+    <button onclick="toggleEditMode()" style="margin-left:20px; background:var(--accent); color:black; font-weight:bold; border-radius:20px; border:none; padding:8px 20px;">保存して終了</button>
+</div>
+
+<script>
+    let isEditMode = false, idleTime = 0, isScreensaverActive = false, sortableInstance = null;
+    let saverClicks = 0, devClicks = 0, isDevMode = false;
+
+    // --- Developer Mode ---
+    function handleDevClick() {
+        if(isEditMode) return;
+        devClicks++;
+        if(devClicks >= 10) {
+            isDevMode = true;
+            document.getElementById('dev-status').style.display = 'inline';
+            document.getElementById('add-btn').innerText = "＋ HTMLコードを追加";
+            alert("Developer Mode Enabled: HTML注入が可能です。");
+            devClicks = 0;
+        }
+    }
+
+    // --- Screensaver Logic ---
+    function handleSaverClick() {
+        saverClicks++;
+        const guide = document.getElementById('saver-guide');
+        const count = document.getElementById('click-count');
+        if(saverClicks >= 2) {
+            exitScreensaver();
+        } else {
+            count.innerText = (2 - saverClicks);
+            guide.style.opacity = "1";
+        }
+    }
+
+    function handleGlobalKey(e) {
+        resetIdle();
+        if(isScreensaverActive && e.key === "Enter") handleSaverClick();
+    }
+
+    function updateSaverImage() {
+        if (!isScreensaverActive) return;
+        const wp = document.getElementById('wallpaper');
+        const imgUrl = `https://picsum.photos/1920/1080?random=${Math.random()}`;
+        const img = new Image();
+        img.src = imgUrl;
+        img.onload = () => { wp.style.opacity = 0; setTimeout(() => { wp.style.backgroundImage = `url('${imgUrl}')`; wp.style.opacity = 1; }, 500); };
+    }
+
+    function updateSystem() {
+        const now = new Date();
+        const tStr = now.toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'});
+        const dStr = now.toLocaleDateString('ja-JP', {year:'numeric', month:'long', day:'numeric', weekday:'short'});
+        document.getElementById('header-clock').childNodes[0].textContent = tStr + " ";
+        if(document.getElementById('greet-msg')) {
+            const h = now.getHours();
+            document.getElementById('greet-msg').innerText = (h<11)?"おはようございます。":(h<18)?"こんにちは。":"こんばんは。";
+            document.getElementById('greet-date').innerText = `今日は ${dStr} です`;
+        }
+        const b = document.getElementById('breathe-status');
+        if(b) b.innerText = ((now.getTime()/1000)%8 < 4) ? "吸って..." : "吐いて...";
+        if(isScreensaverActive) {
+            document.getElementById('saver-time').innerText = tStr;
+            document.getElementById('saver-date').innerText = dStr;
+        }
+    }
+
+    function resetIdle() { idleTime = 0; }
+    function enterScreensaver() {
+        if (isEditMode) return;
+        isScreensaverActive = true; saverClicks = 0;
+        const ss = document.getElementById('screensaver');
+        ss.style.display = 'block';
+        setTimeout(() => ss.style.opacity = '1', 50);
+        updateSaverImage();
+        window.ssInterval = setInterval(updateSaverImage, 60000);
+    }
+
+    function exitScreensaver() {
+        isScreensaverActive = false;
+        clearInterval(window.ssInterval);
+        const ss = document.getElementById('screensaver');
+        ss.style.opacity = '0';
+        document.getElementById('saver-guide').style.opacity = "0";
+        setTimeout(() => { ss.style.display = 'none'; idleTime = 0; }, 1000);
+    }
+
+    // --- Widget Management ---
+    function toggleEditMode() {
+        isEditMode = !isEditMode;
+        const grid = document.getElementById('grid'), toolbar = document.getElementById('edit-toolbar'), btn = document.getElementById('edit-mode-toggle');
+        if (isEditMode) {
+            grid.classList.add('edit-mode'); toolbar.style.display = 'block'; btn.innerText = "編集中...";
+            sortableInstance = Sortable.create(grid, { animation: 150, onEnd: saveLayout });
+        } else {
+            grid.classList.remove('edit-mode'); toolbar.style.display = 'none'; btn.innerText = "レイアウト編集";
+            if(sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
+            saveLayout();
+        }
+    }
+
+    function addNewWidget() {
+        const promptMsg = isDevMode ? "HTMLコードまたはURLを入力してください:" : "埋め込みたいURLを入力してください:";
+        const input = prompt(promptMsg);
+        if (input) {
+            const div = document.createElement('div');
+            div.className = 'card'; div.style.width = "400px"; div.style.height = "300px";
+            let content = input.startsWith('<') ? input : `<iframe src="${input}"></iframe>`;
+            div.innerHTML = `<button class="del-btn" onclick="removeWidget(this)">×</button><h3>Custom</h3><div class="widget-body"><div class="iframe-wrapper">${content}</div></div>`;
+            document.getElementById('grid').appendChild(div);
+            saveLayout();
+        }
+    }
+
+    function saveLayout() { localStorage.setItem('hub_v30_dev', document.getElementById('grid').innerHTML); }
+    function loadLayout() {
+        const saved = localStorage.getItem('hub_v30_dev');
+        if (saved) {
+            document.getElementById('grid').innerHTML = saved;
+            const si = document.querySelector('.search-input');
+            if (si) si.onkeydown = (e) => { if(e.key==='Enter') window.open('https://www.google.com/search?q='+encodeURIComponent(si.value)); };
+        }
+    }
+
+    function resetAll() { if(confirm('初期化しますか？')) { localStorage.removeItem('hub_v30_dev'); location.reload(); } }
+    function removeWidget(btn) { if(confirm('削除しますか？')) { btn.closest('.card').remove(); saveLayout(); } }
+    function toggleFullScreen() { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+
+    setInterval(() => { if (!isScreensaverActive) { idleTime++; if (idleTime >= 60 && !isEditMode) enterScreensaver(); } updateSystem(); }, 1000);
+    window.onload = () => { loadLayout(); updateSystem(); };
+</script>
+</body>
+</html>
